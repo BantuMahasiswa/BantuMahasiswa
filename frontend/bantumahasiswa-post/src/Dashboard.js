@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import './import/import.jsx';
 
 const Dashboard = () => {
     const [userData, setUserData] = useState(null);
     const [errorMessage, setErrorMessage] = useState('');
     const [token, setToken] = useState('');
-    const [newPost, setNewPost] = useState({ image: '', description: '' });
-    const [imagePreview, setImagePreview] = useState('');
+    const [newPost, setNewPost] = useState({ description: '' });
+    const [posts, setPosts] = useState([]); // Untuk menyimpan daftar post
 
     useEffect(() => {
         const fetchUserData = async () => {
@@ -40,74 +41,32 @@ const Dashboard = () => {
         fetchUserData();
     }, []);
 
-    const handleFileChange = (e) => {
-        const file = e.target.files[0];
-
-        if (file && file.size > 10 * 1024 * 1024) {
-            setErrorMessage('Ukuran file terlalu besar. Maksimal 10MB.');
-            return;
-        }
-
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const img = new Image();
-                img.src = reader.result;
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = 200;
-                    canvas.height = 200;
-
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-                    const resizedImage = canvas.toDataURL('image/jpeg');
-                    setImagePreview(resizedImage);
-                    setNewPost({ ...newPost, image: resizedImage });
-                };
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
-    const handleAddPost = async (e) => {
+    const handlePostSubmit = async (e) => {
         e.preventDefault();
-
-        if (!newPost.image || !newPost.description) {
-            setErrorMessage('Gambar dan deskripsi tidak boleh kosong');
-            return;
-        }
-
+        console.log('Posting data:', newPost); // Log data postingan yang akan dikirim
         try {
-            const formData = new FormData();
-            const imageFile = await fetch(newPost.image)
-                .then(res => res.blob());
-
-            formData.append('image', imageFile, 'image.jpg'); // Menambahkan file gambar ke FormData
-            formData.append('description', newPost.description); // Menambahkan deskripsi
-
             const response = await fetch('http://localhost:5000/posts', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
-                    // 'Content-Type': 'multipart/form-data', // Jangan set Content-Type untuk FormData
+                    'Content-Type': 'application/json',
                 },
-                body: formData,
+                body: JSON.stringify(newPost),
             });
 
             if (!response.ok) {
-                throw new Error('Gagal menambahkan post');
+                throw new Error('Gagal mengirim komentar.');
             }
 
-            // Reset form dan preview setelah berhasil menambahkan post
-            const addedPost = await response.json();
-            console.log('Post added:', addedPost); // Debugging
-            setNewPost({ image: '', description: '' });
-            setImagePreview('');
+            // Update daftar post setelah berhasil
+            setPosts([...posts, { description: newPost.description, userId: userData._id }]);
+            setNewPost({ description: '' });
         } catch (error) {
+            console.error(error); // Tambahkan console log untuk error
             setErrorMessage(error.message);
         }
     };
+    
 
     return (
         <div className="dashboard-container">
@@ -117,29 +76,38 @@ const Dashboard = () => {
             {userData && (
                 <div className="profile-button">
                     <Link to="/profile">
-                        <button>Profile</button>
+                        <button className="btn-profile">Profile</button>
                     </Link>
+                    <p>{userData.email}</p>
+                    <p>ID: {userData.id}</p>
                 </div>
             )}
 
-            {/* Form untuk Menambahkan Post */}
+            {/* Form untuk membuat post */}
             {userData && (
-                <form onSubmit={handleAddPost} className="add-post-form">
-                    <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                    />
-                    {imagePreview && <img src={imagePreview} alt="Preview" className="image-preview" />}
-                    <input
-                        type="text"
-                        placeholder="Deskripsi"
+                <form onSubmit={handlePostSubmit} className="post-form">
+                    <textarea
+                        placeholder="Apa yang Anda pikirkan?"
                         value={newPost.description}
                         onChange={(e) => setNewPost({ ...newPost, description: e.target.value })}
+                        className="input-description"
                     />
-                    <button type="submit">Post</button>
+                    <button type="submit" className="btn-submit">Post</button>
                 </form>
             )}
+
+            {/* Tampilkan daftar post */}
+            <div className="posts-container">
+                {posts.length > 0 ? (
+                    posts.map((post, index) => (
+                        <div key={index} className="post">
+                            <p>{post.description}</p>
+                        </div>
+                    ))
+                ) : (
+                    <p>Tidak ada post yang tersedia.</p>
+                )}
+            </div>
         </div>
     );
 };
